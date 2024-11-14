@@ -3,28 +3,25 @@
 import { createContext, useContext, ReactNode, useState, useEffect } from 'react';
 import { useTelegramWebApp } from '@/hooks/useTelegramWebApp';
 type TelegramContextType = {
-  webApp: ReturnType<typeof useTelegramWebApp>;
+  webApp: Window['Telegram']['WebApp'] | null;
+  startSession: ReturnType<typeof useTelegramWebApp>['startSession'];
   isLoaded: boolean;
+  error: string | null;
 };
 
 const TelegramContext = createContext<TelegramContextType>({
   webApp: null,
+  startSession: async () => { throw new Error('Context not initialized') },
   isLoaded: false,
+  error: null
 });
 
 export function TelegramProvider({ children }: { children: ReactNode }) {
-  const webApp = useTelegramWebApp();
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  useEffect(() => {
-    if (webApp && !isInitialized) {
-      setIsInitialized(true);
-    }
-  }, [webApp, isInitialized]);
+  const { webApp, startSession, isLoaded, error } = useTelegramWebApp();
 
   return (
-    <TelegramContext.Provider value={{ webApp, isLoaded: isInitialized }}>
-      {isInitialized ? children : null}
+    <TelegramContext.Provider value={{ webApp, startSession, isLoaded, error }}>
+      {isLoaded ? children : null}
     </TelegramContext.Provider>
   );
 }

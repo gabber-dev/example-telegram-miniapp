@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession, SessionProvider } from "gabber-client-react";
 import { useTelegram } from "@/context/TelegramContext";
+import { startGabberSession } from "@/actions";
 
 type LogEntry = {
   message: string;
@@ -25,7 +26,6 @@ export default function TelegramWebApp() {
   const [sessionDetails, setSessionDetails] = useState<GabberSession | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     const timestamp = new Date().toISOString();
@@ -37,19 +37,12 @@ export default function TelegramWebApp() {
     }
   }, [webApp]);
 
-  const startGabberSession = useCallback(async () => {
-    if (!apiKey) {
-      addLog('API key not found', 'error');
-      webApp?.showAlert('API key not found');
-      return;
-    }
-
+  const handleStartSession = useCallback(async () => {
     setIsInitializing(true);
     addLog('Initializing...', 'info');
     
     try {
-      const { connection_details, session } = await startSession(
-        apiKey,
+      const data = await startGabberSession(
         '5c34d268-364f-4cd3-abf2-57afcf05ff3b',
         '1785821d-e3ec-489b-99bb-6d21a8e80441',
         '',
@@ -57,10 +50,20 @@ export default function TelegramWebApp() {
         '21892bb9-9809-4b6f-8c3e-e40093069f04'
       );
 
-      setSessionDetails({ connection_details, session });
+      const session = {
+        connection_details: {
+          url: data.connection_details.url,
+          token: data.connection_details.token,
+        },
+        session: {
+          id: data.session.id,
+        }
+      };
+
+      setSessionDetails(session);
       addLog('Session started successfully', 'info');
-      addLog(`Connection URL: ${connection_details.url}`, 'info');
-      addLog(`Session ID: ${session.id}`, 'info');
+      addLog(`Connection URL: ${session.connection_details.url}`, 'info');
+      addLog(`Session ID: ${session.session.id}`, 'info');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       addLog(`Failed to start session: ${errorMessage}`, 'error');
@@ -69,7 +72,7 @@ export default function TelegramWebApp() {
     } finally {
       setIsInitializing(false);
     }
-  }, [apiKey, webApp, addLog]);
+  }, [webApp, addLog]);
 
   if (isInitializing) {
     return (
@@ -84,7 +87,7 @@ export default function TelegramWebApp() {
     return (
       <div className="flex flex-col justify-center items-center h-screen">
         <button
-          onClick={startGabberSession}
+          onClick={handleStartSession}
           className="bg-[#FF5925] text-white px-6 py-3 rounded-md font-semibold hover:bg-blue-600 transition-colors mb-4"
         >
           Start Chat Session
@@ -320,35 +323,4 @@ function LogViewer({ logs, setLogs }: { logs: LogEntry[], setLogs: (logs: LogEnt
       ))}
     </div>
   );
-}
-
-async function startSession(
-  serviceKey: string,
-  scenarioId: string,
-  personaId: string,
-  voice_override: string,
-  time_limit_s: number = 180,
-  llm: string
-) {
-  const response = await fetch("https://app.gabber.dev/api/v1/session/start", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Api-Key": serviceKey,
-    },
-    body: JSON.stringify({
-      persona: personaId,
-      scenario: scenarioId,
-      llm: llm,
-      voice_override,
-      time_limit_s,
-      webhook: "https://app.gabber.dev/api/v1/internal/test/webhook",
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  return await response.json();
 }
