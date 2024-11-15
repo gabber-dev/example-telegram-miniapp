@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useSession, SessionProvider } from "gabber-client-react";
 import { useTelegram } from "@/context/TelegramContext";
-import { startGabberSession } from "@/actions";
+import { ConnectOptions } from 'gabber-client-core';
+import { generateToken, generateVoiceSnippet } from '@/actions';
 
 type LogEntry = {
   message: string;
@@ -11,19 +12,10 @@ type LogEntry = {
   type: 'info' | 'error' | 'warning';
 };
 
-interface GabberSession {
-  connection_details: {
-    url: string;
-    token: string;
-  };
-  session: {
-    id: string;
-  };
-}
-
 export default function TelegramWebApp() {
   const { webApp } = useTelegram();
-  const [sessionDetails, setSessionDetails] = useState<GabberSession | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [connectOptions, setConnectOptions] = useState<ConnectOptions | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
@@ -37,53 +29,92 @@ export default function TelegramWebApp() {
     }
   }, [webApp]);
 
-  const handleStartSession = useCallback(async () => {
+  const fetchToken = useCallback(async () => {
+    try {
+      const userId = webApp?.initDataUnsafe?.user?.id;
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+
+      const tokenData = await generateToken(userId.toString());
+      setToken(tokenData.token);
+      addLog('Token generated successfully', 'info');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      addLog(`Failed to get token: ${errorMessage}`, 'error');
+      console.error('Failed to get token:', error);
+      webApp?.showAlert('Failed to get token');
+    }
+  }, [webApp, addLog]);
+
+  useEffect(() => {
+    fetchToken();
+  }, [fetchToken]);
+
+  const handleStartSession = useCallback(() => {
     setIsInitializing(true);
     addLog('Initializing...', 'info');
     
     try {
-      const data = await startGabberSession(
-        '5c34d268-364f-4cd3-abf2-57afcf05ff3b',
-        '1785821d-e3ec-489b-99bb-6d21a8e80441',
-        '',
-        180,
-        '21892bb9-9809-4b6f-8c3e-e40093069f04'
-      );
-
-      const session = {
-        connection_details: {
-          url: data.connection_details.url,
-          token: data.connection_details.token,
-        },
-        session: {
-          id: data.session.id,
+      const options: ConnectOptions = {
+        token: token!,
+        sessionConnectOptions: {
+          history: [],
+          llm: '21892bb9-9809-4b6f-8c3e-e40093069f04',
+          voice_override: 'f1377b9b-f85d-4bdc-a3a2-c6c7322a3d0a'
         }
       };
 
-      setSessionDetails(session);
-      addLog('Session started successfully', 'info');
-      addLog(`Connection URL: ${session.connection_details.url}`, 'info');
-      addLog(`Session ID: ${session.session.id}`, 'info');
+      setConnectOptions(options);
+      addLog('Session initialized successfully', 'info');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      addLog(`Failed to start session: ${errorMessage}`, 'error');
-      console.error('Failed to start session:', error);
-      webApp?.showAlert('Failed to start session');
+      addLog(`Failed to initialize session: ${errorMessage}`, 'error');
+      console.error('Failed to initialize session:', error);
+      webApp?.showAlert('Failed to initialize session');
     } finally {
       setIsInitializing(false);
     }
-  }, [webApp, addLog]);
+  }, [token, webApp, addLog]);
 
-  if (isInitializing) {
+  const handleGenerateVoice = useCallback(async (text: string, voiceId: string) => {
+    try {
+      addLog('Generating voice snippet...', 'info');
+      const audioSrc = await generateVoiceSnippet(text, voiceId);
+      
+      // Create audio element
+      const audio = new Audio(audioSrc);
+      
+      // Add error handling for audio
+      audio.onerror = (e) => {
+        addLog(`Audio playback error: ${e}`, 'error');
+      };
+
+      // Play audio
+      try {
+        await audio.play();
+        addLog('Voice snippet played successfully', 'info');
+      } catch (playError) {
+        addLog(`Playback failed: ${playError}`, 'error');
+        webApp?.showAlert('Failed to play audio. Please ensure you have granted audio permissions.');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      addLog(`Failed to generate voice: ${errorMessage}`, 'error');
+      webApp?.showAlert('Failed to generate voice');
+    }
+  }, [addLog, webApp]);
+
+  if (!token) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-center text-blue-800">Initializing session...</p>
+        <p className="text-center text-blue-800">Generating token...</p>
         <LogViewer logs={logs} setLogs={setLogs} />
       </div>
     );
   }
 
-  if (!sessionDetails) {
+  if (!connectOptions) {
     return (
       <div className="flex flex-col justify-center items-center h-screen">
         <button
@@ -98,206 +129,170 @@ export default function TelegramWebApp() {
   }
 
   return (
-    <>
-      <SessionProvider
-        connectionDetails={sessionDetails.connection_details}
-        connect={true}
-      >
-        <SimulatorWidget addLog={addLog} />
-      </SessionProvider>
-      <LogViewer logs={logs} setLogs={setLogs} />
-    </>
+    <SessionProvider connectionOpts={connectOptions} connect={true}>
+      <SimulatorWidget addLog={addLog} logs={logs} setLogs={setLogs} webApp={webApp} />
+    </SessionProvider>
   );
 }
 
-function SimulatorWidget({ addLog }: { addLog: (message: string, type?: LogEntry['type']) => void }) {
+function SimulatorWidget({ addLog, logs, setLogs, webApp }) {
   const {
     connectionState,
     messages,
     microphoneEnabled,
-    agentVolumeBands,
-    agentState,
     transcription,
     setMicrophoneEnabled,
     sendChatMessage,
-    startAudio,
     agentVolume,
     userVolume,
     remainingSeconds,
+    error: sessionError
   } = useSession();
-  const [inputMessage, setInputMessage] = useState("");
-  const [audioPermissionDenied, setAudioPermissionDenied] = useState(false);
-  const { webApp } = useTelegram();
+
+  const [inputMessage, setInputMessage] = useState('');
+  const prevConnectionState = useRef(connectionState);
 
   useEffect(() => {
-    const initAudio = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-        await startAudio();
-        addLog('Audio initialized successfully', 'info');
-      } catch (error) {
-        if (error instanceof Error) {
-          if (error.name === 'NotAllowedError') {
-            setAudioPermissionDenied(true);
-            addLog('Microphone permission denied', 'error');
-            webApp?.showAlert('Please enable microphone access to use voice chat');
-          } else {
-            addLog(`Failed to initialize audio: ${error.message}`, 'error');
-          }
-        }
-      }
-    };
-
-    if (connectionState === 'connected' && !audioPermissionDenied) {
-      initAudio();
+    if (sessionError) {
+      addLog(`Session error: ${sessionError}`, 'error');
     }
-  }, [connectionState, startAudio, addLog, webApp, audioPermissionDenied]);
+  }, [sessionError, addLog]);
 
   useEffect(() => {
-    if (connectionState === 'connected') {
-      addLog('Successfully connected to agent', 'info');
+    if (prevConnectionState.current !== connectionState) {
+      addLog(`Connection state: ${connectionState}`, 'info');
+      prevConnectionState.current = connectionState;
     }
   }, [connectionState, addLog]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = useCallback(() => {
     if (inputMessage.trim()) {
       sendChatMessage({ text: inputMessage });
-      setInputMessage("");
+      setInputMessage('');
     }
-  };
+  }, [inputMessage, sendChatMessage]);
 
-  if (connectionState === 'connecting') {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <p>Connecting to agent...</p>
-      </div>
-    );
-  }
-
-  if (connectionState === 'failed') {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <p className="text-red-500 mb-4">Failed to connect to agent</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="bg-[#FF5925] text-white px-4 py-2 rounded"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const messagesContainer = document.querySelector('.overflow-y-auto');
+    if (messagesContainer && messages.length > 0) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  }, [messages]);
 
   return (
-    <div className="bg-white rounded-lg shadow-md border-2 border-blue-600 h-[400px] w-full mx-auto flex flex-col overflow-hidden">
-      <div className="p-2 flex-grow flex flex-col overflow-hidden">
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="text-lg font-semibold text-blue-600">Gabber AI Chat</h3>
-          <div className="text-sm">
-            <span className="font-semibold">Status:</span> {connectionState}
-          </div>
-        </div>
-
-        <div className="flex-grow flex flex-row overflow-hidden">
-          {/* Left column - Controls and Metrics */}
-          <div className="w-1/2 pr-2 flex flex-col">
-            <button
-              onClick={() => setMicrophoneEnabled(!microphoneEnabled)}
-              className={`mb-2 px-2 py-1 rounded font-semibold ${
-                microphoneEnabled
-                  ? "bg-[#FF5925] hover:bg-red-600"
-                  : "bg-blue-600 hover:bg-blue-700"
-              } text-white transition-colors`}
-            >
-              {microphoneEnabled ? "Disable Mic" : "Enable Mic"}
-            </button>
-
-            <div className="mb-2">
-              <h4 className="font-semibold text-blue-600 mb-1 text-xs">
-                Agent Volume:
-              </h4>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                <div
-                  className="bg-[#FF5925] h-1.5 rounded-full"
-                  style={{ width: `${agentVolume * 100}%` }}
-                />
+    <>
+      <div className="bg-white rounded-lg shadow-md border-2 border-blue-600 h-[400px] w-full mx-auto flex flex-col overflow-hidden">
+        <div className="p-2 flex-grow flex flex-col overflow-hidden">
+          <h3 className="text-lg font-semibold mb-2 text-blue-600">Gabber AI Chat</h3>
+          <div className="flex-grow flex flex-row overflow-hidden">
+            {/* Left column - Controls */}
+            <div className="w-1/2 pr-2 flex flex-col">
+              <div className="mb-1 text-xs text-gray-600">
+                <span className="font-semibold">Connection:</span> {connectionState}
               </div>
-            </div>
+              
+              <button
+                onClick={() => setMicrophoneEnabled(prevState => !prevState)}
+                className={`mb-2 px-2 py-1 rounded font-semibold text-xs ${
+                  microphoneEnabled
+                    ? "bg-red-500 hover:bg-red-600"
+                    : "bg-blue-500 hover:bg-blue-600"
+                } text-white transition-colors`}
+              >
+                {microphoneEnabled ? "Disable Mic" : "Enable Mic"}
+              </button>
 
-            <div className="mb-2">
-              <h4 className="font-semibold text-blue-600 mb-1 text-xs">
-                User Volume:
-              </h4>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                <div
-                  className="bg-blue-600 h-1.5 rounded-full"
-                  style={{ width: `${userVolume * 100}%` }}
-                />
-              </div>
-            </div>
-
-            {remainingSeconds !== null && (
               <div className="mb-2">
-                <h4 className="font-semibold text-blue-600 mb-1 text-xs">
-                  Time Remaining:
-                </h4>
-                <div className={`text-sm font-semibold ${
-                  remainingSeconds > 10 ? "text-[#FF5925]" : "text-red-600"
-                }`}>
-                  {remainingSeconds} seconds
+                <h4 className="font-semibold text-blue-600 mb-1 text-xs">Agent Volume:</h4>
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div
+                    className="bg-[#FF5925] h-1.5 rounded-full"
+                    style={{ width: `${agentVolume * 100}%` }}
+                  />
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Right column - Messages */}
-          <div className="w-1/2 pl-2 border-l border-gray-200 flex flex-col">
-            <div className="flex-grow overflow-y-auto bg-gray-50 p-1 rounded">
-              {messages.map((msg, index) => (
-                <div
-                  key={index}
-                  className={`p-2 rounded-lg mb-2 ${
-                    msg.agent ? "bg-gray-100 ml-4" : "bg-blue-100 mr-4"
-                  }`}
-                >
-                  <p className="text-sm">{msg.text}</p>
+              <div className="mb-2">
+                <h4 className="font-semibold text-blue-600 mb-1 text-xs">User Volume:</h4>
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div
+                    className="bg-blue-600 h-1.5 rounded-full"
+                    style={{ width: `${userVolume * 100}%` }}
+                  />
                 </div>
-              ))}
-              {transcription.text && (
-                <div className="italic text-sm text-gray-500 px-2">
-                  {transcription.text}
+              </div>
+
+              {remainingSeconds !== null && (
+                <div className="mb-2">
+                  <h4 className="font-semibold text-blue-600 mb-1 text-xs">Remaining Time:</h4>
+                  <div className={`text-sm font-semibold ${
+                    remainingSeconds > 10 ? "text-[#FF5925]" : "text-red-600"
+                  }`}>
+                    {remainingSeconds} seconds
+                  </div>
                 </div>
               )}
             </div>
-          </div>
-        </div>
 
-        {/* Input area */}
-        <div className="p-2 border-t border-gray-200 mt-2">
-          <div className="flex">
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  handleSendMessage();
-                }
-              }}
-              className="flex-grow border-2 border-blue-600 rounded-l px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-600"
-              placeholder="Type a message..."
-            />
-            <button
-              onClick={handleSendMessage}
-              className="bg-[#FF5925] text-white px-4 py-1 rounded-r font-semibold hover:bg-blue-600 transition-colors"
-            >
-              Send
-            </button>
+            {/* Right column - Messages */}
+            <div className="w-1/2 pl-2 border-l border-gray-200 flex flex-col">
+              <h4 className="font-semibold text-blue-600 mb-1 text-xs">Messages:</h4>
+              <div className="flex-grow overflow-y-auto bg-gray-50 p-3 rounded mb-2 h-[280px]">
+                <div className="flex flex-col space-y-2">
+                  {messages.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`flex ${msg.agent ? 'justify-start' : 'justify-end'}`}
+                    >
+                      <div
+                        className={`max-w-[85%] p-2 rounded-lg ${
+                          msg.agent 
+                            ? "bg-white border border-gray-200" 
+                            : "bg-[#FF5925] text-white"
+                        }`}
+                      >
+                        <p className="text-sm break-words">{msg.text}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {transcription.text && (
+                    <div className="text-xs text-gray-500 italic text-center">
+                      {transcription.text}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Input area */}
+          <div className="p-2 border-t border-gray-200 mt-2">
+            <div className="flex">
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                className="flex-grow border-2 border-blue-600 rounded-l px-2 py-1 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                placeholder="Type a message..."
+              />
+              <button
+                onClick={handleSendMessage}
+                className="bg-[#FF5925] text-white px-4 py-1 rounded-r font-semibold hover:bg-blue-600 transition-colors"
+              >
+                Send
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+      <LogViewer logs={logs} setLogs={setLogs} />
+    </>
   );
 }
 

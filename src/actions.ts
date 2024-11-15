@@ -10,13 +10,50 @@ const axiosInstance = axios.create({
   timeout: 5000,
 });
 
-export async function startGabberSession(
-  scenarioId: string,
-  personaId: string,
-  voice_override: string,
-  time_limit_s: number = 180,
-  llm: string
-) {
+export async function generateToken(userId: string) {
+  const apiKey = process.env.GABBER_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('API key not found');
+  }
+  console.log('Generating token for user:', userId);
+  try {
+    const response = await axiosInstance.post('https://app.gabber.dev/api/v1/usage/token', {
+      human_id: userId,
+      limits: [{
+        type: "conversational_seconds",
+        value: 180
+      }]
+    }, {
+      headers: {
+        'X-Api-Key': apiKey,
+      },
+    });
+    console.log('Token response:', response.data);
+    
+    if (!response.data.token) {
+      throw new Error('No token in response');
+    }
+    
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error('Token generation failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+        config: {
+          url: error.config?.url,
+          data: error.config?.data
+        }
+      });
+      throw new Error(`Token generation failed: ${error.response?.data?.message || error.message}`);
+    }
+    throw error;
+  }
+}
+
+export async function generateVoiceSnippet(text: string, voiceId: string) {
   const apiKey = process.env.GABBER_API_KEY;
   
   if (!apiKey) {
@@ -24,45 +61,30 @@ export async function startGabberSession(
   }
 
   try {
-    const response = await axiosInstance.post('/api/v1/session/start', {
-      persona: personaId,
-      scenario: scenarioId,
-      llm: llm,
-      voice_override,
-      time_limit_s,
-      webhook: "https://app.gabber.dev/api/v1/internal/test/webhook",
+    const response = await axiosInstance.post('https://app.gabber.dev/api/v1/voice/generate', {
+      text,
+      voice_id: voiceId
     }, {
       headers: {
         'X-Api-Key': apiKey,
+        'Accept': 'audio/mpeg',
       },
+      responseType: 'arraybuffer'
     });
-
-    return response.data;
+    
+    // Convert the array buffer to base64
+    const audioData = Buffer.from(response.data).toString('base64');
+    return `data:audio/mpeg;base64,${audioData}`;
   } catch (error) {
-    console.error('Failed to start session:', error);
-    throw new Error(error instanceof Error ? error.message : 'Failed to start session');
+    if (axios.isAxiosError(error)) {
+      console.error('Voice generation failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+      });
+      throw new Error(`Voice generation failed: ${error.response?.data?.message || error.message}`);
+    }
+    throw error;
   }
 }
 
-export async function generateToken() {
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error('API key not found');
-  }
-
-  try {
-    const response = await axiosInstance.post('/api/v1/usage/token', {
-      // Add your request body here
-    }, {
-      headers: {
-        'X-Api-Key': apiKey,
-      },
-    });
-
-    return response.data;
-  } catch (error) {
-    console.error('Failed to generate token:', error);
-    throw new Error(error instanceof Error ? error.message : 'Failed to generate token');
-  }
-}
