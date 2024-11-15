@@ -88,3 +88,53 @@ export async function generateVoiceSnippet(text: string, voiceId: string) {
   }
 }
 
+export interface Voice {
+  id: string;
+  name: string;
+  language?: string;
+}
+
+// Add this new function
+export async function fetchVoices(): Promise<Voice[]> {
+  const apiKey = process.env.GABBER_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('API key not found');
+  }
+
+  try {
+    const response = await axiosInstance.get('/api/v1/voice/list', {
+      headers: {
+        'X-Api-Key': apiKey,
+      }
+    });
+
+    if (!response.data || !response.data.values) {
+      throw new Error('Invalid response format: missing values array');
+    }
+
+    const validVoices = response.data.values
+      .filter(voice => voice && typeof voice.id === 'string' && typeof voice.name === 'string')
+      .map(voice => ({
+        id: voice.id,
+        name: voice.name,
+        language: voice.language || undefined
+      }));
+
+    if (validVoices.length === 0) {
+      throw new Error('No valid voices found in response');
+    }
+
+    return validVoices;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error('Voice fetch failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw new Error(`Failed to fetch voices: ${error.response?.data?.message || error.message}`);
+    }
+    throw error;
+  }
+}

@@ -1,8 +1,23 @@
 // hooks/useTelegramWebApp.ts
 import { useEffect, useState, useCallback } from 'react'
 import { generateToken } from '@/actions'
+
+interface TelegramWebApp {
+  ready: () => void;
+  showAlert: (message: string) => void;
+  initDataUnsafe?: {
+    user?: {
+      id: string;
+    };
+  };
+}
+
+type WindowTelegram = {
+  WebApp: TelegramWebApp;
+}
+
 type TelegramWebAppState = {
-  webApp: any | undefined;
+  webApp: TelegramWebApp | undefined;
   startSession: (
     scenarioId: string,
     personaId: string,
@@ -13,8 +28,9 @@ type TelegramWebAppState = {
   isLoaded: boolean;
   error: string | null;
 }
+
 export function useTelegramWebApp(): TelegramWebAppState {
-  const [webApp, setWebApp] = useState<Window['Telegram'] | null>(null)
+  const [webApp, setWebApp] = useState<TelegramWebApp | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -24,7 +40,7 @@ export function useTelegramWebApp(): TelegramWebAppState {
         const app = window.Telegram?.WebApp
         if (app) {
           app.ready()
-          setWebApp(app as any)
+          setWebApp(app as TelegramWebApp)
           setIsLoaded(true)
         } else {
           setError('Telegram WebApp not found')
@@ -48,7 +64,7 @@ export function useTelegramWebApp(): TelegramWebAppState {
       throw new Error('Telegram WebApp not initialized')
     }
     try {
-      const userId = webApp?.initDataUnsafe?.user?.id;
+      const userId = webApp.initDataUnsafe?.user?.id;
       if (!userId) {
         throw new Error('User ID not found');
       }

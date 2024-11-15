@@ -5,6 +5,7 @@ import { useSession, SessionProvider } from "gabber-client-react";
 import { useTelegram } from "@/context/TelegramContext";
 import { ConnectOptions } from 'gabber-client-core';
 import { generateToken, generateVoiceSnippet } from '@/actions';
+import { VoiceSnippetGenerator } from './VoiceSnippetGenerator';
 
 type LogEntry = {
   message: string;
@@ -131,6 +132,7 @@ export default function TelegramWebApp() {
   return (
     <SessionProvider connectionOpts={connectOptions} connect={true}>
       <SimulatorWidget addLog={addLog} logs={logs} setLogs={setLogs} webApp={webApp} />
+      <VoiceSnippetGenerator />
     </SessionProvider>
   );
 }
