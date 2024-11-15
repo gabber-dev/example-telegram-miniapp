@@ -4,8 +4,20 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import { useSession, SessionProvider } from "gabber-client-react";
 import { useTelegram } from "@/context/TelegramContext";
 import { ConnectOptions } from 'gabber-client-core';
-import { generateToken, generateVoiceSnippet } from '@/actions';
+import { 
+  generateToken, 
+  generateVoiceSnippet, 
+  fetchLLMs,
+  fetchPersonas,
+  fetchScenarios,
+  fetchVoices,
+  LLM,
+  Persona,
+  Scenario,
+  Voice 
+} from '@/actions';
 import { VoiceSnippetGenerator } from './VoiceSnippetGenerator';
+import { SessionSetup } from './SessionSetup';
 
 type LogEntry = {
   message: string;
@@ -108,8 +120,9 @@ export default function TelegramWebApp() {
 
   if (!token) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex flex-col items-center justify-center h-screen">
         <p className="text-center text-blue-800">Generating token...</p>
+        <VoiceSnippetGenerator />
         <LogViewer logs={logs} setLogs={setLogs} />
       </div>
     );
@@ -118,22 +131,49 @@ export default function TelegramWebApp() {
   if (!connectOptions) {
     return (
       <div className="flex flex-col justify-center items-center h-screen">
-        <button
-          onClick={handleStartSession}
-          className="bg-[#FF5925] text-white px-6 py-3 rounded-md font-semibold hover:bg-blue-600 transition-colors mb-4"
-        >
-          Start Chat Session
-        </button>
+        <SessionSetup 
+          isLoading={isInitializing}
+          onStart={({ llmId, personaId, scenarioId, voiceId }) => {
+            setIsInitializing(true);
+            addLog('Initializing with selected options...', 'info');
+            
+            try {
+              const options: ConnectOptions = {
+                token: token!,
+                sessionConnectOptions: {
+                  history: [],
+                  ...(llmId && { llm: llmId }),
+                  ...(voiceId && { voice_override: voiceId }),
+                  persona: personaId,
+                  scenario: scenarioId
+                }
+              };
+
+              setConnectOptions(options);
+              addLog('Session initialized successfully', 'info');
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+              addLog(`Failed to initialize session: ${errorMessage}`, 'error');
+              console.error('Failed to initialize session:', error);
+              webApp?.showAlert('Failed to initialize session');
+            } finally {
+              setIsInitializing(false);
+            }
+          }}
+        />
+        <VoiceSnippetGenerator />
         <LogViewer logs={logs} setLogs={setLogs} />
       </div>
     );
   }
 
   return (
-    <SessionProvider connectionOpts={connectOptions} connect={true}>
-      <SimulatorWidget addLog={addLog} logs={logs} setLogs={setLogs} webApp={webApp} />
+    <>
+      <SessionProvider connectionOpts={connectOptions} connect={true}>
+        <SimulatorWidget addLog={addLog} logs={logs} setLogs={setLogs} webApp={webApp} />
+      </SessionProvider>
       <VoiceSnippetGenerator />
-    </SessionProvider>
+    </>
   );
 }
 

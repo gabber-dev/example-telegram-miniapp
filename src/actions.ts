@@ -138,3 +138,168 @@ export async function fetchVoices(): Promise<Voice[]> {
     throw error;
   }
 }
+
+export interface LLM {
+  id: string;
+  name: string;
+  project?: string;
+}
+
+export interface PersonaTag {
+  human_name: string;
+  name: string;
+}
+
+export interface Persona {
+  id: string;
+  name: string;
+  description: string;
+  image_url?: string;
+  project?: string;
+  tags?: PersonaTag[];
+  voice?: string;
+}
+
+export interface Scenario {
+  id: string;
+  name: string;
+  project?: string;
+  prompt?: string;
+}
+
+export async function fetchLLMs(): Promise<LLM[]> {
+  const apiKey = process.env.GABBER_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('API key not found');
+  }
+
+  try {
+    const response = await axiosInstance.get('/api/v1/llm/list', {
+      headers: {
+        'X-Api-Key': apiKey,
+      }
+    });
+
+    if (!response.data || !response.data.values) {
+      throw new Error('Invalid response format: missing values array');
+    }
+
+    const validLLMs = response.data.values
+      .filter(llm => llm && typeof llm.id === 'string' && typeof llm.name === 'string')
+      .map(llm => ({
+        id: llm.id,
+        name: llm.name,
+        project: llm.project || undefined
+      }));
+
+    if (validLLMs.length === 0) {
+      throw new Error('No valid LLMs found in response');
+    }
+
+    return validLLMs;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error('LLM fetch failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw new Error(`Failed to fetch LLMs: ${error.response?.data?.message || error.message}`);
+    }
+    throw error;
+  }
+}
+
+export async function fetchPersonas(): Promise<Persona[]> {
+  const apiKey = process.env.GABBER_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('API key not found');
+  }
+
+  try {
+    const response = await axiosInstance.get('/api/v1/persona/list', {
+      headers: {
+        'X-Api-Key': apiKey,
+      }
+    });
+
+    if (!response.data || !response.data.values) {
+      throw new Error('Invalid response format: missing values array');
+    }
+
+    const validPersonas = response.data.values
+      .filter(persona => persona && typeof persona.id === 'string' && typeof persona.name === 'string')
+      .map(persona => ({
+        id: persona.id,
+        name: persona.name,
+        description: persona.description,
+        image_url: persona.image_url || undefined,
+        project: persona.project || undefined,
+        tags: persona.tags || undefined,
+        voice: persona.voice || undefined
+      }));
+
+    if (validPersonas.length === 0) {
+      throw new Error('No valid personas found in response');
+    }
+
+    return validPersonas;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error('Persona fetch failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw new Error(`Failed to fetch personas: ${error.response?.data?.message || error.message}`);
+    }
+    throw error;
+  }
+}
+
+export async function fetchScenarios(): Promise<Scenario[]> {
+  const apiKey = process.env.GABBER_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error('API key not found');
+  }
+
+  try {
+    const response = await axiosInstance.get('/api/v1/scenario/list', {
+      headers: {
+        'X-Api-Key': apiKey,
+      }
+    });
+
+    if (!response.data || !response.data.values) {
+      throw new Error('Invalid response format: missing values array');
+    }
+
+    const validScenarios = response.data.values
+      .filter(scenario => scenario && typeof scenario.id === 'string' && typeof scenario.name === 'string')
+      .map(scenario => ({
+        id: scenario.id,
+        name: scenario.name,
+        project: scenario.project || undefined,
+        prompt: scenario.prompt || undefined
+      }));
+
+    if (validScenarios.length === 0) {
+      throw new Error('No valid scenarios found in response');
+    }
+
+    return validScenarios;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error('Scenario fetch failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw new Error(`Failed to fetch scenarios: ${error.response?.data?.message || error.message}`);
+    }
+    throw error;
+  }
+}
