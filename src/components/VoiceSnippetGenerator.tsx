@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTelegram } from '@/context/TelegramContext';
-import { fetchVoices, Voice, generateVoiceSnippet } from '@/actions';
+import { fetchVoices, Voice, generateVoiceSnippet, sendVoiceToTelegram } from '@/actions';
 
 export function VoiceSnippetGenerator() {
   const [voices, setVoices] = useState<Voice[]>([]);
@@ -8,6 +8,9 @@ export function VoiceSnippetGenerator() {
   const [text, setText] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [audioSrc, setAudioSrc] = useState<string | null>(null);
+  const [channelUsername, setChannelUsername] = useState<string>('');
+  const [isSending, setIsSending] = useState(false);
   const { webApp } = useTelegram();
 
   useEffect(() => {
@@ -47,10 +50,11 @@ export function VoiceSnippetGenerator() {
 
     setIsLoading(true);
     try {
-      const audioSrc = await generateVoiceSnippet(text, selectedVoice);
+      const generatedAudioSrc = await generateVoiceSnippet(text, selectedVoice);
+      setAudioSrc(generatedAudioSrc);
       
       // Create audio element
-      const audio = new Audio(audioSrc);
+      const audio = new Audio(generatedAudioSrc);
       
       // Add error handling for audio
       audio.onerror = (e) => {
@@ -74,6 +78,31 @@ export function VoiceSnippetGenerator() {
       webApp?.showAlert(errorMsg);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSendToChannel = async () => {
+    if (!audioSrc || !channelUsername) {
+      webApp?.showAlert('Please generate audio and enter a channel username first');
+      return;
+    }
+
+    // Ensure channel username starts with @
+    const formattedUsername = channelUsername.startsWith('@') 
+      ? channelUsername 
+      : `@${channelUsername}`;
+
+    setIsSending(true);
+    try {
+      await sendVoiceToTelegram(audioSrc, formattedUsername);
+      webApp?.showAlert('Voice message sent successfully to channel!');
+      setError(null);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to send voice message';
+      setError(errorMsg);
+      webApp?.showAlert(errorMsg);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -116,6 +145,29 @@ export function VoiceSnippetGenerator() {
         >
           {isLoading ? 'Generating...' : 'Generate Snippet'}
         </button>
+
+        {audioSrc && (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">
+              Channel Username
+              <input
+                type="text"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                value={channelUsername}
+                onChange={(e) => setChannelUsername(e.target.value)}
+                placeholder="Enter channel username (e.g., @mychannel)"
+              />
+            </label>
+            
+            <button
+              className="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 disabled:opacity-50"
+              onClick={handleSendToChannel}
+              disabled={isSending || !channelUsername}
+            >
+              {isSending ? 'Sending...' : 'Send to Channel'}
+            </button>
+          </div>
+        )}
 
         {error && (
           <div className="text-red-500 text-sm">

@@ -303,3 +303,44 @@ export async function fetchScenarios(): Promise<Scenario[]> {
     throw error;
   }
 }
+
+
+export async function sendVoiceToTelegram(audioBase64: string, chatId: string) {
+  const botToken = process.env.BOT_TOKEN;
+
+  if (!botToken) {
+    throw new Error('Telegram bot token not found');
+  }
+
+  try {
+    // Convert base64 to Blob
+    const base64Data = audioBase64.includes(',') 
+      ? audioBase64.split(',')[1] 
+      : audioBase64;
+    
+    const byteCharacters = Buffer.from(base64Data, 'base64');
+    const blob = new Blob([byteCharacters], { type: 'audio/ogg' }); // Correct format
+
+    // Create form data
+    const formData = new FormData();
+    formData.append('voice', blob, 'voice_message.ogg');
+    formData.append('chat_id', chatId);
+
+    // Send to Telegram
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendVoice`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!data.ok) {
+      throw new Error(data.description || 'Failed to send voice message');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Failed to send voice to Telegram:', error);
+    throw error;
+  }
+}
