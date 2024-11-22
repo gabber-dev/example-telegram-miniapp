@@ -326,6 +326,7 @@ export async function sendVoiceToTelegram(audioBase64: string, chatId: string) {
     formData.append('voice', blob, 'voice_message.ogg');
     formData.append('chat_id', chatId);
 
+    console.log('Sending voice to Telegram:', formData);
     // Send to Telegram
     const response = await fetch(`https://api.telegram.org/bot${botToken}/sendVoice`, {
       method: 'POST',

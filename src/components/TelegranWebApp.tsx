@@ -120,8 +120,8 @@ export default function TelegramWebApp() {
 
   if (!token) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen">
-        <p className="text-center text-blue-800">Generating token...</p>
+      <div className="min-h-screen p-4">
+        <p className="text-lg font-bold text-center mb-4">Generating token...</p>
         <VoiceSnippetGenerator />
         <LogViewer logs={logs} setLogs={setLogs} />
       </div>
@@ -130,7 +130,7 @@ export default function TelegramWebApp() {
 
   if (!connectOptions) {
     return (
-      <div className="flex flex-col justify-center items-center h-screen">
+      <div className="min-h-screen p-4">
         <SessionSetup 
           isLoading={isInitializing}
           onStart={({ llmId, personaId, scenarioId, voiceId }) => {
@@ -168,12 +168,12 @@ export default function TelegramWebApp() {
   }
 
   return (
-    <>
+    <div className="min-h-screen p-4">
       <SessionProvider connectionOpts={connectOptions} connect={true}>
         <SimulatorWidget addLog={addLog} logs={logs} setLogs={setLogs} webApp={webApp} />
       </SessionProvider>
       <VoiceSnippetGenerator />
-    </>
+    </div>
   );
 }
 
@@ -222,142 +222,141 @@ function SimulatorWidget({ addLog, logs, setLogs, webApp }) {
   }, [messages]);
 
   return (
-    <>
-      <div className="bg-white rounded-lg shadow-md border-2 border-blue-600 h-[400px] w-full mx-auto flex flex-col overflow-hidden">
-        <div className="p-2 flex-grow flex flex-col overflow-hidden">
-          <h3 className="text-lg font-semibold mb-2 text-blue-600">Gabber AI Chat</h3>
-          <div className="flex-grow flex flex-row overflow-hidden">
-            {/* Left column - Controls */}
-            <div className="w-1/2 pr-2 flex flex-col">
-              <div className="mb-1 text-xs text-gray-600">
-                <span className="font-semibold">Connection:</span> {connectionState}
-              </div>
-              
-              <button
-                onClick={() => setMicrophoneEnabled(prevState => !prevState)}
-                className={`mb-2 px-2 py-1 rounded font-semibold text-xs ${
-                  microphoneEnabled
-                    ? "bg-red-500 hover:bg-red-600"
-                    : "bg-blue-500 hover:bg-blue-600"
-                } text-white transition-colors`}
-              >
-                {microphoneEnabled ? "Disable Mic" : "Enable Mic"}
-              </button>
+    <div className="max-w-2xl mx-auto">
+      {/* Chat Container */}
+      <div className="border border-gray-200 rounded-lg shadow-sm bg-white">
+        {/* Header */}
+        <div className="p-4 border-b border-gray-200">
+          <h3 className="text-lg font-bold">Gabber AI Chat</h3>
+          <div className="text-sm text-gray-500">
+            Status: {connectionState}
+          </div>
+        </div>
 
-              <div className="mb-2">
-                <h4 className="font-semibold text-blue-600 mb-1 text-xs">Agent Volume:</h4>
-                <div className="w-full bg-gray-200 rounded-full h-1.5">
-                  <div
-                    className="bg-[#FF5925] h-1.5 rounded-full"
+        {/* Main Content */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+          {/* Controls */}
+          <div className="space-y-4">
+            <button
+              onClick={() => setMicrophoneEnabled(prev => !prev)}
+              className={`w-full py-2 px-4 rounded-md text-white font-medium ${
+                microphoneEnabled ? 'bg-red-500' : 'bg-blue-500'
+              }`}
+            >
+              {microphoneEnabled ? 'Disable Mic' : 'Enable Mic'}
+            </button>
+
+            {/* Volume Indicators */}
+            <div className="space-y-2">
+              <div>
+                <label className="text-sm font-medium">Agent Volume</label>
+                <div className="h-2 bg-gray-200 rounded-full">
+                  <div 
+                    className="h-2 bg-blue-500 rounded-full"
                     style={{ width: `${agentVolume * 100}%` }}
                   />
                 </div>
               </div>
 
-              <div className="mb-2">
-                <h4 className="font-semibold text-blue-600 mb-1 text-xs">User Volume:</h4>
-                <div className="w-full bg-gray-200 rounded-full h-1.5">
-                  <div
-                    className="bg-blue-600 h-1.5 rounded-full"
+              <div>
+                <label className="text-sm font-medium">User Volume</label>
+                <div className="h-2 bg-gray-200 rounded-full">
+                  <div 
+                    className="h-2 bg-green-500 rounded-full"
                     style={{ width: `${userVolume * 100}%` }}
                   />
                 </div>
               </div>
+            </div>
 
-              {remainingSeconds !== null && (
-                <div className="mb-2">
-                  <h4 className="font-semibold text-blue-600 mb-1 text-xs">Remaining Time:</h4>
-                  <div className={`text-sm font-semibold ${
-                    remainingSeconds > 10 ? "text-[#FF5925]" : "text-red-600"
+            {remainingSeconds !== null && (
+              <div className="text-sm font-medium">
+                Time Remaining: {remainingSeconds}s
+              </div>
+            )}
+          </div>
+
+          {/* Messages */}
+          <div className="h-[400px] overflow-y-auto border border-gray-100 rounded-lg p-4">
+            <div className="space-y-4">
+              {messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`flex ${msg.agent ? 'justify-start' : 'justify-end'}`}
+                >
+                  <div className={`max-w-[80%] rounded-lg p-3 ${
+                    msg.agent ? 'bg-gray-100' : 'bg-blue-500 text-white'
                   }`}>
-                    {remainingSeconds} seconds
+                    {msg.text}
                   </div>
+                </div>
+              ))}
+              {transcription.text && (
+                <div className="text-sm text-gray-500 italic text-center">
+                  {transcription.text}
                 </div>
               )}
             </div>
-
-            {/* Right column - Messages */}
-            <div className="w-1/2 pl-2 border-l border-gray-200 flex flex-col">
-              <h4 className="font-semibold text-blue-600 mb-1 text-xs">Messages:</h4>
-              <div className="flex-grow overflow-y-auto bg-gray-50 p-3 rounded mb-2 h-[280px]">
-                <div className="flex flex-col space-y-2">
-                  {messages.map((msg, index) => (
-                    <div
-                      key={index}
-                      className={`flex ${msg.agent ? 'justify-start' : 'justify-end'}`}
-                    >
-                      <div
-                        className={`max-w-[85%] p-2 rounded-lg ${
-                          msg.agent 
-                            ? "bg-white border border-gray-200" 
-                            : "bg-[#FF5925] text-white"
-                        }`}
-                      >
-                        <p className="text-sm break-words">{msg.text}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {transcription.text && (
-                    <div className="text-xs text-gray-500 italic text-center">
-                      {transcription.text}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
+        </div>
 
-          {/* Input area */}
-          <div className="p-2 border-t border-gray-200 mt-2">
-            <div className="flex">
-              <input
-                type="text"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                className="flex-grow border-2 border-blue-600 rounded-l px-2 py-1 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-600"
-                placeholder="Type a message..."
-              />
-              <button
-                onClick={handleSendMessage}
-                className="bg-[#FF5925] text-white px-4 py-1 rounded-r font-semibold hover:bg-blue-600 transition-colors"
-              >
-                Send
-              </button>
-            </div>
+        {/* Input Area */}
+        <div className="p-4 border-t border-gray-200">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              className="flex-1 border border-gray-200 rounded-md px-3 py-2"
+              placeholder="Type a message..."
+            />
+            <button
+              onClick={handleSendMessage}
+              className="bg-blue-500 text-white px-4 py-2 rounded-md"
+            >
+              Send
+            </button>
           </div>
         </div>
       </div>
+      
       <LogViewer logs={logs} setLogs={setLogs} />
-    </>
+    </div>
   );
 }
 
-function LogViewer({ logs, setLogs }: { logs: LogEntry[], setLogs: (logs: LogEntry[]) => void }) {
+function LogViewer({ logs, setLogs }) {
   return (
-    <div className="fixed bottom-0 left-0 w-full bg-black bg-opacity-80 text-white p-2 max-h-40 overflow-y-auto">
-      <div className="flex justify-between mb-2">
-        <h3 className="text-sm font-bold">Debug Logs</h3>
+    <div className="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-4 max-h-48 overflow-y-auto">
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="font-bold">Debug Logs</h3>
         <button 
           onClick={() => setLogs([])} 
-          className="text-xs bg-red-500 px-2 py-1 rounded"
+          className="bg-red-500 px-3 py-1 rounded-md text-sm"
         >
           Clear
         </button>
       </div>
-      {logs.map((log, i) => (
-        <div key={i} className={`text-xs mb-1 ${
-          log.type === 'error' ? 'text-red-400' :
-          log.type === 'warning' ? 'text-yellow-400' : 'text-green-400'
-        }`}>
-          [{new Date(log.timestamp).toLocaleTimeString()}] {log.message}
-        </div>
-      ))}
+      <div className="space-y-1">
+        {logs.map((log, i) => (
+          <div 
+            key={i} 
+            className={`text-sm ${
+              log.type === 'error' ? 'text-red-400' :
+              log.type === 'warning' ? 'text-yellow-400' : 
+              'text-green-400'
+            }`}
+          >
+            [{new Date(log.timestamp).toLocaleTimeString()}] {log.message}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

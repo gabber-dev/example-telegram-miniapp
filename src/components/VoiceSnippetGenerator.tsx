@@ -87,14 +87,9 @@ export function VoiceSnippetGenerator() {
       return;
     }
 
-    // Ensure channel username starts with @
-    const formattedUsername = channelUsername.startsWith('@') 
-      ? channelUsername 
-      : `@${channelUsername}`;
-
     setIsSending(true);
     try {
-      await sendVoiceToTelegram(audioSrc, formattedUsername);
+      await sendVoiceToTelegram(audioSrc, channelUsername);
       webApp?.showAlert('Voice message sent successfully to channel!');
       setError(null);
     } catch (err) {
