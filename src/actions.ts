@@ -3,7 +3,7 @@
 import axios from 'axios'
 
 const axiosInstance = axios.create({
-  baseURL: 'https://app.gabber.dev',
+  baseURL: 'https://api.gabber.dev',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -18,12 +18,9 @@ export async function generateToken(userId: string) {
   }
   console.log('Generating token for user:', userId);
   try {
-    const response = await axiosInstance.post('https://app.gabber.dev/api/v1/usage/token', {
+    const response = await axiosInstance.post('https://api.gabber.dev/v1/usage/token', {
       human_id: userId,
-      limits: [{
-        type: "conversational_seconds",
-        value: 180
-      }]
+      ttl_seconds: 3600
     }, {
       headers: {
         'X-Api-Key': apiKey,
@@ -61,7 +58,7 @@ export async function generateVoiceSnippet(text: string, voiceId: string) {
   }
 
   try {
-    const response = await axiosInstance.post('https://app.gabber.dev/api/v1/voice/generate', {
+    const response = await axiosInstance.post('https://api.gabber.dev/v1/voice/generate', {
       text,
       voice_id: voiceId
     }, {
@@ -103,7 +100,7 @@ export async function fetchVoices(): Promise<Voice[]> {
   }
 
   try {
-    const response = await axiosInstance.get('/api/v1/voice/list', {
+    const response = await axiosInstance.get('/v1/voice/list', {
       headers: {
         'X-Api-Key': apiKey,
       }
@@ -175,7 +172,7 @@ export async function fetchLLMs(): Promise<LLM[]> {
   }
 
   try {
-    const response = await axiosInstance.get('/api/v1/llm/list', {
+    const response = await axiosInstance.get('/v1/llm/list', {
       headers: {
         'X-Api-Key': apiKey,
       }
@@ -219,7 +216,7 @@ export async function fetchPersonas(): Promise<Persona[]> {
   }
 
   try {
-    const response = await axiosInstance.get('/api/v1/persona/list', {
+    const response = await axiosInstance.get('/v1/persona/list', {
       headers: {
         'X-Api-Key': apiKey,
       }
@@ -267,7 +264,7 @@ export async function fetchScenarios(): Promise<Scenario[]> {
   }
 
   try {
-    const response = await axiosInstance.get('/api/v1/scenario/list', {
+    const response = await axiosInstance.get('/v1/scenario/list', {
       headers: {
         'X-Api-Key': apiKey,
       }
